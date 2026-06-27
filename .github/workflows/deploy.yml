@@ -76,4 +76,16 @@ jobs:
             docker image prune -f
 
             echo "Deployed ${IMAGE}"
-            curl -sf http://localhost/api/v1/flags >/dev/null && echo "Health check passed"
+
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost/api/v1/flags >/dev/null; then
+                echo "Health check passed"
+                exit 0
+              fi
+              echo "Waiting for app to start (${i}/30)..."
+              sleep 5
+            done
+
+            echo "Health check failed — container logs:"
+            docker logs feature-flags-api || true
+            exit 1
