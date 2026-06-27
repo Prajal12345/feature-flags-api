@@ -10,6 +10,7 @@ public record FlagResponse(
         boolean defaultState,
         List<FlagRule> rules,
         Integer percentageRollout,
-        Instant updatedAt
+        Instant updatedAt,
+        Long version
 ) {
 }

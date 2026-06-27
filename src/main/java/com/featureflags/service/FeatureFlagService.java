@@ -6,6 +6,7 @@ import com.featureflags.dto.FlagResponse;
 import com.featureflags.dto.UpdateFlagRequest;
 import com.featureflags.exception.FlagAlreadyExistsException;
 import com.featureflags.exception.FlagNotFoundException;
+import com.featureflags.exception.FlagVersionConflictException;
 import com.featureflags.model.FeatureFlag;
 import com.featureflags.repository.FeatureFlagRepository;
 import org.slf4j.Logger;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -75,6 +77,9 @@ public class FeatureFlagService {
     @Transactional
     public FlagResponse updateFlag(String name, UpdateFlagRequest request) {
         FeatureFlag flag = findFlagOrThrow(name);
+        if (!Objects.equals(flag.getVersion(), request.version())) {
+            throw new FlagVersionConflictException(name);
+        }
         flag.setDefaultState(request.defaultState());
         flag.setRules(request.rules() != null ? request.rules() : List.of());
         flag.setPercentageRollout(request.percentageRollout());
@@ -115,7 +120,7 @@ public class FeatureFlagService {
 
     FeatureFlag save(FeatureFlag flag) {
         try {
-            return repository.save(flag);
+            return repository.saveAndFlush(flag);
         } catch (DataAccessException ex) {
             log.error("Failed to persist feature flag '{}'", flag.getName(), ex);
             throw ex;
@@ -144,7 +149,8 @@ public class FeatureFlagService {
                 flag.isDefaultState(),
                 flag.getRules(),
                 flag.getPercentageRollout(),
-                flag.getUpdatedAt()
+                flag.getUpdatedAt(),
+                flag.getVersion()
         );
     }
 }

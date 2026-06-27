@@ -11,6 +11,7 @@ import java.util.List;
 public record UpdateFlagRequest(
         @NotNull Boolean defaultState,
         @Valid List<FlagRule> rules,
-        @Min(0) @Max(100) Integer percentageRollout
+        @Min(0) @Max(100) Integer percentageRollout,
+        @NotNull Long version
 ) {
 }
