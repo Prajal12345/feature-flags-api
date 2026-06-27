@@ -201,7 +201,128 @@ src/main/java/com/featureflags/
 
 ## CI/CD
 
-GitHub Actions runs `mvn verify` on push and pull requests (see `.github/workflows/ci.yml`).
+- **CI** — GitHub Actions runs `mvn verify` on push and pull requests (`.github/workflows/ci.yml`)
+- **Deploy** — On push to `main`, GitHub Actions runs tests, then SSHs into a Droplet to `git pull`, `docker build`, and run the container (`.github/workflows/deploy.yml`)
+
+## Docker
+
+Build and run locally:
+
+```bash
+docker build -t feature-flags-api .
+docker run --rm -p 8080:8080 -v featureflags-data:/app/data feature-flags-api
+```
+
+Test:
+
+```bash
+curl http://localhost:8080/api/v1/flags
+```
+
+## Deploy to DigitalOcean Droplet
+
+### Architecture
+
+```mermaid
+flowchart LR
+    A[Push to main] --> B[GitHub Actions: mvn verify]
+    B --> C[SSH into Droplet]
+    C --> D[git pull]
+    D --> E[docker build]
+    E --> F[docker run on port 80]
+```
+
+### One-time setup
+
+#### 1. Create a Droplet
+
+1. Go to https://cloud.digitalocean.com → **Create → Droplets**
+2. **Image:** Ubuntu 22.04
+3. **Size:** Basic $6/mo (1 GB RAM) or larger — use **2 GB+** if builds feel slow
+4. **Authentication:** Add your SSH public key
+5. Create the Droplet and note its **IP address**
+
+#### 2. Prepare the Droplet
+
+SSH in and run the setup script:
+
+```bash
+ssh root@YOUR_DROPLET_IP
+
+# Install Git, Docker, and configure firewall
+curl -fsSL https://raw.githubusercontent.com/Prajal12345/feature-flags-api/main/scripts/droplet-setup.sh | bash
+```
+
+Or copy `scripts/droplet-setup.sh` to the Droplet and run it manually.
+
+#### 3. Create a deploy SSH key for GitHub Actions
+
+On your local machine:
+
+```bash
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f github-actions-deploy -N ""
+```
+
+- Add the **public** key (`github-actions-deploy.pub`) to the Droplet:
+
+```bash
+ssh root@YOUR_DROPLET_IP "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys" < github-actions-deploy.pub
+```
+
+- Keep the **private** key (`github-actions-deploy`) for GitHub secrets
+
+#### 4. Add GitHub repository secrets
+
+Open: https://github.com/Prajal12345/feature-flags-api/settings/secrets/actions
+
+| Secret | Value |
+|--------|-------|
+| `DROPLET_HOST` | Droplet IP address |
+| `DROPLET_USER` | `root` (or your SSH user) |
+| `DROPLET_SSH_KEY` | Full private key contents (`github-actions-deploy`) |
+
+No Container Registry or DigitalOcean API token is required.
+
+### Deploy
+
+Push to `main` (or run the **Deploy** workflow manually from the Actions tab):
+
+```bash
+git push origin main
+```
+
+The workflow will:
+
+1. Run tests (`mvn verify`) on GitHub Actions
+2. SSH into the Droplet
+3. Clone or update the repo at `/opt/feature-flags-api`
+4. Build the Docker image on the Droplet
+5. Run the container on **port 80**
+
+Verify:
+
+```bash
+curl http://YOUR_DROPLET_IP/api/v1/flags
+```
+
+### Manual deploy on the Droplet (optional)
+
+```bash
+cd /opt/feature-flags-api
+git pull origin main
+docker build -t feature-flags-api:latest .
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+### Configuration
+
+| Variable | Default (local) | Production (Droplet) |
+|----------|-----------------|----------------------|
+| `SERVER_PORT` | `8080` | `8080` (mapped to host port 80) |
+| `SPRING_DATASOURCE_URL` | `./data/featureflags` | `/app/data/featureflags` (Docker volume) |
+| `SPRING_H2_CONSOLE_ENABLED` | `true` | `false` |
+
+Data is stored in the Docker volume `featureflags-data` and survives container restarts/redeploys.
 
 ## License
 

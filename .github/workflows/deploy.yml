@@ -1,0 +1,68 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+          cache: maven
+
+      - name: Run tests
+        run: mvn -B verify
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Droplet
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            APP_DIR="/opt/feature-flags-api"
+            IMAGE="feature-flags-api:latest"
+            REPO="https://github.com/${{ github.repository }}.git"
+
+            if [[ ! -d "${APP_DIR}/.git" ]]; then
+              git clone "${REPO}" "${APP_DIR}"
+            fi
+
+            cd "${APP_DIR}"
+            git fetch origin main
+            git reset --hard origin/main
+
+            docker build -t "${IMAGE}" .
+
+            docker stop feature-flags-api 2>/dev/null || true
+            docker rm feature-flags-api 2>/dev/null || true
+
+            docker run -d \
+              --name feature-flags-api \
+              --restart unless-stopped \
+              -p 80:8080 \
+              -v featureflags-data:/app/data \
+              -e SERVER_PORT=8080 \
+              -e SPRING_DATASOURCE_URL='jdbc:h2:file:/app/data/featureflags;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE' \
+              -e SPRING_H2_CONSOLE_ENABLED=false \
+              "${IMAGE}"
+
+            docker image prune -f
+
+            echo "Deployed ${IMAGE} at commit $(git rev-parse --short HEAD)"
+            curl -sf http://localhost/api/v1/flags >/dev/null && echo "Health check passed"
