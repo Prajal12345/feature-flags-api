@@ -202,7 +202,7 @@ src/main/java/com/featureflags/
 ## CI/CD
 
 - **CI** — GitHub Actions runs `mvn verify` on push and pull requests (`.github/workflows/ci.yml`)
-- **Deploy** — On push to `main`, GitHub Actions runs tests, then SSHs into a Droplet to `git pull`, `docker build`, and run the container (`.github/workflows/deploy.yml`)
+- **Deploy** — On push to `main`, GitHub Actions runs tests, builds the Docker image on GitHub runners, transfers it to the Droplet, and starts the container (`.github/workflows/deploy.yml`)
 
 ## Docker
 
@@ -226,10 +226,9 @@ curl http://localhost:8080/api/v1/flags
 ```mermaid
 flowchart LR
     A[Push to main] --> B[GitHub Actions: mvn verify]
-    B --> C[SSH into Droplet]
-    C --> D[git pull]
-    D --> E[docker build]
-    E --> F[docker run on port 80]
+    B --> C[docker build on GitHub runner]
+    C --> D[Transfer image to Droplet]
+    D --> E[docker run on port 80]
 ```
 
 ### One-time setup
@@ -238,7 +237,7 @@ flowchart LR
 
 1. Go to https://cloud.digitalocean.com → **Create → Droplets**
 2. **Image:** Ubuntu 22.04
-3. **Size:** Basic $6/mo (1 GB RAM) or larger — use **2 GB+** if builds feel slow
+3. **Size:** Basic **2 GB RAM** recommended (image transfer + runtime; build happens on GitHub, not the Droplet)
 4. **Authentication:** Add your SSH public key
 5. Create the Droplet and note its **IP address**
 
@@ -294,10 +293,9 @@ git push origin main
 The workflow will:
 
 1. Run tests (`mvn verify`) on GitHub Actions
-2. SSH into the Droplet
-3. Clone or update the repo at `/opt/feature-flags-api`
-4. Build the Docker image on the Droplet
-5. Run the container on **port 80**
+2. Build the Docker image on GitHub Actions (avoids OOM on small Droplets)
+3. Transfer the image to the Droplet over SSH
+4. Run the container on **port 80**
 
 Verify:
 
