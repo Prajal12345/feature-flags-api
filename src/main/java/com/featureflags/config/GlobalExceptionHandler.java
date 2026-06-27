@@ -3,8 +3,6 @@ package com.featureflags.config;
 import com.featureflags.dto.ErrorResponse;
 import com.featureflags.exception.FlagAlreadyExistsException;
 import com.featureflags.exception.FlagNotFoundException;
-import com.featureflags.exception.FlagVersionConflictException;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,16 +22,9 @@ public class GlobalExceptionHandler {
         return buildError(HttpStatus.NOT_FOUND, ex.getMessage(), request.getRequestURI());
     }
 
-    @ExceptionHandler({FlagAlreadyExistsException.class, FlagVersionConflictException.class})
-    public ResponseEntity<ErrorResponse> handleConflict(RuntimeException ex, HttpServletRequest request) {
+    @ExceptionHandler(FlagAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleConflict(FlagAlreadyExistsException ex, HttpServletRequest request) {
         return buildError(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI());
-    }
-
-    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
-    public ResponseEntity<ErrorResponse> handleOptimisticLock(ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
-        return buildError(HttpStatus.CONFLICT,
-                "Feature flag was modified by another request; re-fetch and retry",
-                request.getRequestURI());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

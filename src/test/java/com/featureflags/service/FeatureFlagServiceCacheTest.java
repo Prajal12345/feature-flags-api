@@ -56,12 +56,12 @@ class FeatureFlagServiceCacheTest {
 
     @Test
     void updateRefreshesCacheEntry() {
-        var created = featureFlagService.createFlag(new CreateFlagRequest("checkout-v2", false, List.of(), null));
+        featureFlagService.createFlag(new CreateFlagRequest("checkout-v2", false, List.of(), null));
         featureFlagService.updateFlag("checkout-v2", new UpdateFlagRequest(true, List.of(
                 new FlagRule(1, List.of(
                         new RuleCondition("region", ComparisonOperator.EQUALS, "US")
                 ), true)
-        ), 10, created.version()));
+        ), 10));
 
         FeatureFlag cached = cacheManager.getCache(CacheConfig.FLAG_CACHE).get("checkout-v2", FeatureFlag.class);
 
